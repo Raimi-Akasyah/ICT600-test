@@ -14,14 +14,22 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /var/www/html
 COPY . .
 
-# Set permissions (skip if 'writable' doesn't exist)
-RUN if [ -d "writable" ]; then chmod -R 755 writable; fi
+# Create writable directory if missing
+RUN mkdir -p writable && chmod -R 755 writable
 
-# Install Composer and dependencies
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
-    && composer install --no-dev --ignore-platform-req=ext-intl \
-    && cp env .env \
-    && php spark key:generate
+# Install Composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# Handle environment setup
+RUN if [ -f "env" ]; then \
+    cp env .env && \
+    php spark key:generate; \
+    else \
+    echo "No env file found"; \
+    fi
+
+# Install dependencies (ignore platform reqs)
+RUN composer install --no-dev --ignore-platform-req=ext-intl
 
 # Apache config
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
