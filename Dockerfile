@@ -1,38 +1,47 @@
 FROM php:8.2-apache
 
-# Install system dependencies and PHP extensions
+# 1. Install system dependencies
 RUN apt-get update && apt-get install -y \
-    git \
-    zip \
-    unzip \
-    libicu-dev \
-    && docker-php-ext-configure intl \
-    && docker-php-ext-install intl \
-    && docker-php-ext-enable intl
+    git zip unzip libicu-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Configure Apache
+# 2. Install PHP extensions
+RUN docker-php-ext-install intl && docker-php-ext-enable intl
+
+# 3. Configure Apache
 WORKDIR /var/www/html
 COPY . .
 
-# Create writable directory if missing
-RUN mkdir -p writable && chmod -R 755 writable
+# 4. Create required directories
+RUN mkdir -p writable/{logs,cache,sessions} \
+    && chmod -R 755 writable \
+    && chown -R www-data:www-data writable
 
-# Install Composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+# 5. Install Composer
+RUN curl -sS https://getcomposer.org/installer | php -- \
+    --install-dir=/usr/local/bin --filename=composer
 
-# Handle environment setup
-RUN if [ -f "env" ]; then \
-    cp env .env && \
-    php spark key:generate; \
+# 6. Handle environment setup
+RUN if [ ! -f ".env" ]; then \
+    if [ -f "env" ]; then \
+        cp env .env; \
     else \
-    echo "No env file found"; \
+        echo "app.baseURL = 'http://localhost:8080/'" > .env; \
+    fi; \
+    php spark key:generate; \
     fi
 
-# Install dependencies (ignore platform reqs)
-RUN composer install --no-dev --ignore-platform-req=ext-intl
+# 7. Install dependencies
+RUN composer install --no-dev --ignore-platform-reqs
 
-# Apache config
+# 8. Final Apache config
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN a2enmod rewrite \
+    && sed -ri \
+    -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
+    -e 's!AllowOverride None!AllowOverride All!g' \
+    /etc/apache2/sites-available/*.conf \
+    /etc/apache2/apache2.conf
+
 EXPOSE 80
 CMD ["apache2-foreground"]
