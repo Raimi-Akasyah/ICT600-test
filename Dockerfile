@@ -10,12 +10,14 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install intl \
     && docker-php-ext-enable intl
 
-# Configure Apache and permissions
+# Configure Apache
 WORKDIR /var/www/html
 COPY . .
-RUN chmod -R 755 writable
 
-# Install Composer and dependencies (ignore platform reqs temporarily)
+# Set permissions (skip if 'writable' doesn't exist)
+RUN if [ -d "writable" ]; then chmod -R 755 writable; fi
+
+# Install Composer and dependencies
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
     && composer install --no-dev --ignore-platform-req=ext-intl \
     && cp env .env \
