@@ -1,0 +1,33 @@
+FROM php:8.2-apache
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    zip \
+    unzip
+
+# Enable Apache mod_rewrite
+RUN a2enmod rewrite
+
+# Copy files
+COPY . /var/www/html/
+
+# Install Composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# Install PHP dependencies
+RUN composer install --no-dev
+
+# Set up .env
+RUN cp env .env && php spark key:generate
+
+# Set permissions
+RUN chown -R www-data:www-data /var/www/html/writable
+
+# Configure Apache
+ENV APACHE_DOCUMENT_ROOT /var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+
+EXPOSE 80
+CMD ["apache2-foreground"]
